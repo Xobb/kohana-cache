@@ -3,42 +3,42 @@
  * [Kohana Cache](api/Kohana_Cache) File driver. Provides a file based
  * driver for the Kohana Cache library. This is one of the slowest
  * caching methods.
- *
+ * 
  * ### Configuration example
  *
  * Below is an example of a _file_ server configuration.
- *
+ * 
  *     return array(
  *          'file'   => array(                          // File driver group
  *                  'driver'         => 'file',         // using File driver
  *                  'cache_dir'     => APPPATH.'cache/.kohana_cache', // Cache location
  *           ),
  *     )
- *
+ * 
  * In cases where only one cache group is required, if the group is named `default` there is
  * no need to pass the group name when instantiating a cache instance.
- *
+ * 
  * #### General cache group configuration settings
- *
+ * 
  * Below are the settings available to all types of cache driver.
- *
+ * 
  * Name           | Required | Description
  * -------------- | -------- | ---------------------------------------------------------------
  * driver         | __YES__  | (_string_) The driver type to use
  * cache_dir      | __NO__   | (_string_) The cache directory to use for this cache instance
- *
+ * 
  * ### System requirements
  *
  * *  Kohana 3.0.x
  * *  PHP 5.2.4 or greater
- *
+ * 
  * @package    Kohana
  * @category   Cache
  * @author     Kohana Team
  * @copyright  (c) 2009-2010 Kohana Team
  * @license    http://kohanaphp.com/license
  */
-class Kohana_Cache_File extends Cache {
+class Kohana_Cache_File extends Cache implements Kohana_Cache_GarbageCollect {
 
 	// !!! NOTICE !!!
 	// THIS CONSTANT IS USED BY THE FILE CACHE CLASS
@@ -49,7 +49,7 @@ class Kohana_Cache_File extends Cache {
 	/**
 	 * Creates a hashed filename based on the string. This is used
 	 * to create shorter unique IDs for each cache filename.
-	 *
+	 * 
 	 *     // Create the cache filename
 	 *     $filename = Cache_File::filename($this->_sanitize_id($id));
 	 *
@@ -58,7 +58,7 @@ class Kohana_Cache_File extends Cache {
 	 */
 	protected static function filename($string)
 	{
-		return sha1($string).'.txt';
+		return sha1($string).'.json';
 	}
 
 	/**
@@ -81,7 +81,7 @@ class Kohana_Cache_File extends Cache {
 		try
 		{
 			$directory = Arr::get($this->_config, 'cache_dir', APPPATH.Cache_File::CACHE_DIR);
-			$this->_cache_dir = new RecursiveDirectoryIterator($directory);
+			$this->_cache_dir = new SplFileInfo($directory);
 		}
 		catch (ErrorException $e)
 		{
@@ -90,13 +90,13 @@ class Kohana_Cache_File extends Cache {
 				throw new Kohana_Cache_Exception('Failed to create the defined cache directory : :directory', array(':directory' => $directory));
 			}
 			chmod($directory, 0777);
-			$this->_cache_dir = new RecursiveDirectoryIterator($directory);
+			$this->_cache_dir = new SplFileInfo($directory);
 		}
 
 		// If the defined directory is a file, get outta here
 		if ($this->_cache_dir->isFile())
 		{
-			throw new Kohana_Cache_Exception('Unable to create cache directory as a already file exists : :resource', array(':resource' => $this->_cache_dir->getRealPath()));
+			throw new Kohana_Cache_Exception('Unable to create cache directory as a file already exists : :resource', array(':resource' => $this->_cache_dir->getRealPath()));
 		}
 
 		// Check the read status of the directory
@@ -114,10 +114,10 @@ class Kohana_Cache_File extends Cache {
 
 	/**
 	 * Retrieve a cached value entry by id.
-	 *
+	 * 
 	 *     // Retrieve cache entry from file group
 	 *     $data = Cache::instance('file')->get('foo');
-	 *
+	 * 
 	 *     // Retrieve cache entry from file group and return 'bar' if miss
 	 *     $data = Cache::instance('file')->get('foo', 'bar');
 	 *
@@ -191,12 +191,12 @@ class Kohana_Cache_File extends Cache {
 
 	/**
 	 * Set a value to cache with id and lifetime
-	 *
+	 * 
 	 *     $data = 'bar';
 	 *
 	 *     // Set 'bar' to 'foo' in file group, using default expiry
 	 *     Cache::instance('file')->set('foo', $data);
-	 *
+	 * 
 	 *     // Set 'bar' to 'foo' in file group for 30 seconds
 	 *     Cache::instance('file')->set('foo', $data, 30);
 	 *
@@ -276,10 +276,16 @@ class Kohana_Cache_File extends Cache {
 
 	/**
 	 * Delete a cache entry based on id
-	 *
+	 * 
 	 *     // Delete 'foo' entry from the file group
 	 *     Cache::instance('file')->delete('foo');
 	 *
+<<<<<<< HEAD
+	 *     // Delete 'foo' entry from the file group
+	 *     Cache::instance('file')->delete('foo');
+	 *
+=======
+>>>>>>> upstream/master
 	 * @param   string   id to remove from cache
 	 * @return  boolean
 	 */
@@ -293,11 +299,11 @@ class Kohana_Cache_File extends Cache {
 
 	/**
 	 * Delete all cache entries.
-	 *
+	 * 
 	 * Beware of using this method when
 	 * using shared memory cache systems, as it will wipe every
 	 * entry within the system for all clients.
-	 *
+	 * 
 	 *     // Delete all cache entries in the file group
 	 *     Cache::instance('file')->delete_all();
 	 *
@@ -309,18 +315,31 @@ class Kohana_Cache_File extends Cache {
 	}
 
 	/**
-	 * Deletes files recursively and returns FALSE on any errors
+	 * Garbage collection method that cleans any expired
+	 * cache entries from the cache.
 	 *
+	 * @return  void
+	 */
+	public function garbage_collect()
+	{
+		$this->_delete_file($this->_cache_dir, TRUE, FALSE, TRUE);
+		return;
+	}
+
+	/**
+	 * Deletes files recursively and returns FALSE on any errors
+	 * 
 	 *     // Delete a file or folder whilst retaining parent directory and ignore all errors
 	 *     $this->_delete_file($folder, TRUE, TRUE);
 	 *
 	 * @param   SplFileInfo  file
 	 * @param   boolean  retain the parent directory
 	 * @param   boolean  ignore_errors to prevent all exceptions interrupting exec
+	 * @param   boolean  only expired files
 	 * @return  boolean
 	 * @throws  Kohana_Cache_Exception
 	 */
-	protected function _delete_file(SplFileInfo $file, $retain_parent_directory = FALSE, $ignore_errors = FALSE)
+	protected function _delete_file(SplFileInfo $file, $retain_parent_directory = FALSE, $ignore_errors = FALSE, $only_expired = FALSE)
 	{
 		// Allow graceful error handling
 		try
@@ -330,8 +349,27 @@ class Kohana_Cache_File extends Cache {
 			{
 				try
 				{
-					// Try to delete
-					unlink($file->getRealPath());
+					// If only expired is not set
+					if ($only_expired === FALSE)
+					{
+						// We want to delete the file
+						$delete = TRUE;
+					}
+					// Otherwise...
+					else
+					{
+						// Assess the file expiry to flag it for deletion
+						$json = $file->openFile('r')->current();
+						$data = json_decode($json);
+						$delete = $data->expiry < time();
+					}
+
+					// If the delete flag is set
+					if ($delete === TRUE)
+					{
+						// Try to delete
+						unlink($file->getRealPath());
+					}
 				}
 				catch (ErrorException $e)
 				{
@@ -408,7 +446,7 @@ class Kohana_Cache_File extends Cache {
 
 	/**
 	 * Resolves the cache directory real path from the filename
-	 *
+	 * 
 	 *      // Get the realpath of the cache folder
 	 *      $realpath = $this->_resolve_directory($filename);
 	 *
